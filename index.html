@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roblox Account Monitoring</title>
+    <!-- Tailwind CSS buat styling modern -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4 md:p-8">
+    <div class="max-w-4xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-emerald-400">🎮 Account Monitoring Dashboard</h1>
+            <p class="text-slate-400 text-sm mt-1">Real-time tracking Sheckles & Inventory</p>
+        </header>
+
+        <!-- Kartu Informasi Sheckles -->
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 mb-8 shadow-lg flex items-center justify-between">
+            <div>
+                <p class="text-slate-400 text-sm font-medium">Total Sheckles</p>
+                <h2 id="shecklesDisplay" class="text-3xl md:text-4xl font-extrabold text-amber-400 mt-1">Loading...</h2>
+            </div>
+            <div class="bg-amber-500/10 p-4 rounded-xl border border-amber-500/20">
+                <span class="text-2xl">🪙</span>
+            </div>
+        </div>
+
+        <!-- Tabel Inventory -->
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-lg">
+            <div class="p-4 md:p-6 border-b border-slate-700 flex justify-between items-center">
+                <h3 class="text-xl font-semibold">📦 Inventory (Gear & Seed)</h3>
+                <span id="updateStatus" class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30">Live Sync</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-700/50 text-slate-400 text-xs uppercase tracking-wider">
+                            <th class="p-4">Username</th>
+                            <th class="p-4">Category</th>
+                            <th class="p-4">Item Name</th>
+                            <th class="p-4">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTable" class="divide-y divide-slate-700 text-sm">
+                        <tr>
+                            <td colspan="4" class="p-6 text-center text-slate-400">Memuat data dari database...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Koneksi Supabase & Render Data -->
+    <script>
+        // Masukkan kredensial Supabase lu di sini
+        const SUPABASE_URL = "https://ixlfaqxeunlkilmzsbmu.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4bGZhcXhldW5sa2lsbXpzYm11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2MDQxNTgsImV4cCI6MjEwMTE4MDE1OH0.Pjp9yiCI6MEfWCmq1SLfDDPEK3aZOVTFwCB2nw-2sgs";
+        
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // Fungsi format angka Sheckles (M / B / T)
+        function formatSheckles(num) {
+            if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+            if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+            return num;
+        }
+
+        async function fetchData() {
+            // Ambil Sheckles
+            const { data: shecklesData } = await supabaseClient.from('User_sheckles').select('*');
+            if (shecklesData && shecklesData.length > 0) {
+                const totalSheckles = shecklesData[0].sheckles || 0;
+                document.getElementById('shecklesDisplay').innerText = formatSheckles(totalSheckles) + " (" + totalSheckles.toLocaleString() + ")";
+            } else {
+                document.getElementById('shecklesDisplay').innerText = "0";
+            }
+
+            // Ambil Inventory
+            const { data: inventoryData } = await supabaseClient.from('Item_monitoring').select('*').order('category', { ascending: true });
+            const tbody = document.getElementById('inventoryTable');
+            tbody.innerHTML = '';
+
+            if (inventoryData && inventoryData.length > 0) {
+                inventoryData.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.className = "hover:bg-slate-700/30 transition-colors";
+                    row.innerHTML = `
+                        <td class="p-4 font-medium text-slate-200">${item.username}</td>
+                        <td class="p-4">
+                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${item.category === 'Gear' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}">
+                                ${item.category}
+                            </span>
+                        </td>
+                        <td class="p-4 text-slate-300">${item.item_name}</td>
+                        <td class="p-4 font-bold text-amber-300">${item.amount.toLocaleString()}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } else {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400">Belum ada data item yang tersinkron.</td></tr>`;
+            }
+        }
+
+        // Load pertama kali
+        fetchData();
+
+        // Refresh otomatis setiap 10 detik agar web-nya real-time ngikutin game
+        setInterval(fetchData, 10000);
+    </script>
+</body>
+</html>
