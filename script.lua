@@ -55,7 +55,7 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. Sync Inventory & Fruit
+    -- 3. Sync Inventory & Fruit dengan Normalisasi Nama & Stack yang Akurat
     local itemsPayload = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack") or LocalPlayer:FindFirstChild("Inventory")
     local aggregatedItems = {}
@@ -63,8 +63,12 @@ local function scanAndSync()
     if backpack then
         for _, item in ipairs(backpack:GetChildren()) do
             local rawName = item.Name
+            
+            -- Bersihkan spasi berlebih di awal/akhir nama item agar tidak duplikat di web
+            local cleanName = rawName:gsub("^%s*(.-)%s*$", "%1")
+            
             local category = "Seed"
-            local lowerName = rawName:lower()
+            local lowerName = cleanName:lower()
             
             -- Deteksi Kategori Gear
             if lowerName:find("shovel") or lowerName:find("sprinkler") or lowerName:find("can") or lowerName:find("trowel") or lowerName:find("pot") or lowerName:find("gear") or lowerName:find("crate") or lowerName:find("sign") or lowerName:find("chest") then
@@ -72,14 +76,14 @@ local function scanAndSync()
             end
 
             -- Cek apakah item ini termasuk kategori Fruit berbobot
-            local isFruit = lowerName:find("kg") or rawName:match("%[%s*%d+%.?%d*%s*kg%s*%]") or rawName:match("%d+%.?%d*%s*kg")
+            local isFruit = lowerName:find("kg") or cleanName:match("%[%s*%d+%.?%d*%s*kg%s*%]") or cleanName:match("%d+%.?%d*%s*kg")
 
-            local finalItemName = rawName
+            local finalItemName = cleanName
             if isFruit then
                 category = "Fruit"
             end
 
-            -- Ambil jumlah (Amount) item dengan sangat akurat
+            -- Ambil jumlah (Amount) item dengan mendeteksi berbagai macam atribut game
             local amount = 1
             if item:GetAttribute("Amount") then
                 amount = tonumber(item:GetAttribute("Amount")) or 1
@@ -98,19 +102,23 @@ local function scanAndSync()
             elseif item:FindFirstChild("Value") then
                 amount = tonumber(item.Value) or 1
             else
-                local foundNum = rawName:match("%((%d+)%)") or rawName:match("x(%d+)")
+                local foundNum = cleanName:match("%((%d+)%)") or cleanName:match("x(%d+)")
                 if foundNum then
                     amount = tonumber(foundNum) or 1
                 end
             end
 
+            -- Pastikan amount berbentuk angka bulat murni
+            amount = math.floor(tonumber(amount) or 1)
+
+            -- Gunakan nama bersih sebagai key penggabung item
             local key = finalItemName
             if aggregatedItems[key] then
                 aggregatedItems[key].amount = aggregatedItems[key].amount + amount
             else
                 aggregatedItems[key] = {
-                    item_name = finalItemName,
-                    category = category,
+                    item_name = tostring(finalItemName),
+                    category = tostring(category),
                     amount = amount
                 }
             end
@@ -128,7 +136,7 @@ local function scanAndSync()
             Method = "POST",
             Headers = headers,
             Body = HttpService:JSONEncode({
-                p_username = username,
+                p_username = tostring(username),
                 p_items = itemsPayload
             })
         })
