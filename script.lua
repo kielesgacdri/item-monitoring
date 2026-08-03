@@ -1,3 +1,4 @@
+-- // Kise Monitoring Script - Final Version
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 
@@ -55,7 +56,7 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. Sync Inventory & Fruit
+    -- 3. Sync Inventory & Fruit (Direct Delete + Insert)
     local itemsPayload = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack") or LocalPlayer:FindFirstChild("Inventory")
     local aggregatedItems = {}
@@ -65,10 +66,9 @@ local function scanAndSync()
             local rawName = item.Name
             local cleanName = rawName:gsub("^%s*(.-)%s*$", "%1")
             
-            local category = "Seeds" -- Default untuk tanaman/biji
+            local category = "Seeds"
             local lowerName = cleanName:lower()
             
-            -- Gabungkan Watering Can, Trowel, Sprinkler, dll masuk ke kategori Gear
             if lowerName:find("shovel") or lowerName:find("sprinkler") or lowerName:find("watering can") or lowerName:find("wateringcan") or lowerName:find("trowel") or lowerName:find("pot") or lowerName:find("gear") or lowerName:find("crate") or lowerName:find("sign") or lowerName:find("chest") then
                 category = "Gear"
             elseif lowerName:find("gnome") then
@@ -79,15 +79,12 @@ local function scanAndSync()
                 category = "Eggs"
             end
 
-            -- Cek apakah item ini termasuk kategori Fruit berbobot
             local isFruit = lowerName:find("kg") or cleanName:match("%[%s*%d+%.?%d*%s*kg%s*%]") or cleanName:match("%d+%.?%d*%s*kg")
-
             local finalItemName = cleanName
             if isFruit then
                 category = "Fruit"
             end
 
-            -- Ambil jumlah item dengan akurat
             local amount = 1
             if item:GetAttribute("Amount") then
                 amount = tonumber(item:GetAttribute("Amount")) or 1
@@ -119,6 +116,7 @@ local function scanAndSync()
                 aggregatedItems[key].amount = aggregatedItems[key].amount + amount
             else
                 aggregatedItems[key] = {
+                    username = tostring(username),
                     item_name = tostring(finalItemName),
                     category = tostring(category),
                     amount = amount
@@ -131,18 +129,37 @@ local function scanAndSync()
         table.insert(itemsPayload, itemData)
     end
 
-    -- Kirim menggunakan RPC function update_user_inventory
+    -- STEP A: Hapus data inventory lama khusus username ini di Supabase
     pcall(function()
         httpRequest({
-            Url = SUPABASE_URL .. "rpc/update_user_inventory",
-            Method = "POST",
-            Headers = headers,
-            Body = HttpService:JSONEncode({
-                p_username = tostring(username),
-                p_items = itemsPayload
-            })
+            Url = SUPABASE_URL .. "Item_monitoring?username=eq." .. username,
+            Method = "DELETE",
+            Headers = {
+                ["apikey"] = SUPABASE_KEY,
+                ["Authorization"] = "Bearer " .. SUPABASE_KEY,
+                ["Content-Type"] = "application/json"
+            }
         })
     end)
+
+    task.wait(0.5)
+
+    -- STEP B: Masukkan data inventory baru yang valid saat ini
+    if #itemsPayload > 0 then
+        pcall(function()
+            httpRequest({
+                Url = SUPABASE_URL .. "Item_monitoring",
+                Method = "POST",
+                Headers = {
+                    ["apikey"] = SUPABASE_KEY,
+                    ["Authorization"] = "Bearer " .. SUPABASE_KEY,
+                    ["Content-Type"] = "application/json",
+                    ["Prefer"] = "return=minimal"
+                },
+                Body = HttpService:JSONEncode(itemsPayload)
+            })
+        end)
+    end
 
     print("[SYNC SUCCESS] Data & Status Online (" .. username .. ") berhasil diperbarui!")
 end
