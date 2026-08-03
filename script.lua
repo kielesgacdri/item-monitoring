@@ -54,7 +54,7 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. Sync Inventory
+    -- 3. Sync Inventory (Menggunakan RPC untuk otomatis menghapus item lama yang sudah tidak ada)
     local itemsPayload = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack") or LocalPlayer:FindFirstChild("Inventory")
     local aggregatedItems = {}
@@ -65,7 +65,8 @@ local function scanAndSync()
             local category = "Seed"
             local lowerName = itemName:lower()
             
-            if lowerName:find("sprinkler") or lowerName:find("can") or lowerName:find("trowel") or lowerName:find("pot") or lowerName:find("gear") or lowerName:find("crate") or lowerName:find("sign") or lowerName:find("chest") then
+            -- Perbaikan kategori: Shovel, Trowel, Gear, dll masuk ke "Gear"
+            if lowerName:find("shovel") or lowerName:find("sprinkler") or lowerName:find("can") or lowerName:find("trowel") or lowerName:find("pot") or lowerName:find("gear") or lowerName:find("crate") or lowerName:find("sign") or lowerName:find("chest") then
                 category = "Gear"
             end
 
@@ -89,9 +90,8 @@ local function scanAndSync()
                 aggregatedItems[key].amount = aggregatedItems[key].amount + amount
             else
                 aggregatedItems[key] = {
-                    username = username,
-                    category = category,
                     item_name = itemName,
+                    category = category,
                     amount = amount
                 }
             end
@@ -102,16 +102,18 @@ local function scanAndSync()
         table.insert(itemsPayload, itemData)
     end
 
-    if #itemsPayload > 0 then
-        pcall(function()
-            httpRequest({
-                Url = SUPABASE_URL .. "Item_monitoring?on_conflict=username,category,item_name",
-                Method = "POST",
-                Headers = headers,
-                Body = HttpService:JSONEncode(itemsPayload)
+    -- Kirim menggunakan RPC function update_user_inventory agar data lama terhapus bersih
+    pcall(function()
+        httpRequest({
+            Url = SUPABASE_URL .. "rpc/update_user_inventory",
+            Method = "POST",
+            Headers = headers,
+            Body = HttpService:JSONEncode({
+                p_username = username,
+                p_items = itemsPayload
             })
-        end)
-    end
+        })
+    end)
 
     print("[SYNC] Data & Status Online (" .. username .. ") berhasil diperbarui!")
 end
