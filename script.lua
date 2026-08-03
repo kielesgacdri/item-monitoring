@@ -54,44 +54,58 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. Sync Inventory (Menggunakan RPC untuk otomatis menghapus item lama yang sudah tidak ada)
+    -- 3. Sync Inventory & Fruit dengan Pembersihan Nama yang Akurat
     local itemsPayload = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack") or LocalPlayer:FindFirstChild("Inventory")
     local aggregatedItems = {}
 
     if backpack then
         for _, item in ipairs(backpack:GetChildren()) do
-            local itemName = item.Name
+            local rawName = item.Name
             local category = "Seed"
-            local lowerName = itemName:lower()
+            local lowerName = rawName:lower()
             
-            -- Perbaikan kategori: Shovel, Trowel, Gear, dll masuk ke "Gear"
+            -- Deteksi Kategori Gear
             if lowerName:find("shovel") or lowerName:find("sprinkler") or lowerName:find("can") or lowerName:find("trowel") or lowerName:find("pot") or lowerName:find("gear") or lowerName:find("crate") or lowerName:find("sign") or lowerName:find("chest") then
                 category = "Gear"
             end
 
+            -- Cek apakah item ini termasuk kategori Fruit berbobot (mengandung pola [xx kg] atau xx kg)
+            local isFruit = lowerName:find("kg") or rawName:match("%[%s*%d+%.?%d*%s*kg%s*%]") or rawName:match("%d+%.?%d*%s*kg")
+
+            local finalItemName = rawName
+            if isFruit then
+                category = "Fruit"
+                -- Opsi: Jika ingin nama fruit digabungkan tanpa embel-embel berat kilonya, 
+                -- aktifkan baris di bawah ini. Jika ingin tetap utuh beserta beratnya, biarkan apa adanya.
+                -- finalItemName = (rawName:gsub("%s*%[%s*%d+%.?%d*%s*kg%s*%]", ""):gsub("%s*%d+%.?%d*%s*kg", "")):gsub("^%s*(.-)%s*$", "%1")
+            end
+
+            -- Ambil jumlah (Amount) item dengan aman
             local amount = 1
-            if item:FindFirstChild("Amount") then
+            if item:GetAttribute("Amount") then
+                amount = tonumber(item:GetAttribute("Amount")) or 1
+            elseif item:GetAttribute("Count") then
+                amount = tonumber(item:GetAttribute("Count")) or 1
+            elseif item:GetAttribute("Stack") then
+                amount = tonumber(item:GetAttribute("Stack")) or 1
+            elseif item:FindFirstChild("Amount") then
                 amount = tonumber(item.Amount.Value) or 1
             elseif item:FindFirstChild("Count") then
                 amount = tonumber(item.Count.Value) or 1
             elseif item:FindFirstChild("Value") then
                 amount = tonumber(item.Value) or 1
-            elseif item:FindFirstChild("Stack") then
-                amount = tonumber(item.Stack.Value) or 1
-            elseif item:GetAttribute("Amount") then
-                amount = tonumber(item:GetAttribute("Amount")) or 1
-            elseif item:GetAttribute("Count") then
-                amount = tonumber(item:GetAttribute("Count")) or 1
             end
 
-            -- FIX: Kunci pakai nama item saja (itemName) supaya tidak pecah berdasarkan kategori
-            local key = itemName
+            -- Jika item adalah buah dengan berat unik dan tidak ingin digabung kilonya, 
+            -- jadikan key unik. Tapi jika sudah dibersihkan namanya, dia akan otomatis ter-stack.
+            local key = finalItemName
+            
             if aggregatedItems[key] then
                 aggregatedItems[key].amount = aggregatedItems[key].amount + amount
             else
                 aggregatedItems[key] = {
-                    item_name = itemName,
+                    item_name = finalItemName,
                     category = category,
                     amount = amount
                 }
@@ -116,7 +130,7 @@ local function scanAndSync()
         })
     end)
 
-    print("[SYNC] Data & Status Online (" .. username .. ") berhasil diperbarui!")
+    print("[SYNC SUCCESS] Data & Status Online (" .. username + ") berhasil diperbarui!")
 end
 
 task.spawn(function()
