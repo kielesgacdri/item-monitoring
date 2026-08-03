@@ -85,7 +85,8 @@ local function scanAndSync()
                 amount = tonumber(item:GetAttribute("Count")) or 1
             end
 
-            local key = category .. "_" .. itemName
+            -- FIX: Kunci pakai nama item saja (itemName) supaya tidak pecah berdasarkan kategori
+            local key = itemName
             if aggregatedItems[key] then
                 aggregatedItems[key].amount = aggregatedItems[key].amount + amount
             else
