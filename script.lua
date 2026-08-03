@@ -55,7 +55,7 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. Sync Inventory & Fruit dengan Normalisasi Nama & Stack yang Akurat
+    -- 3. Sync Inventory & Fruit
     local itemsPayload = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack") or LocalPlayer:FindFirstChild("Inventory")
     local aggregatedItems = {}
@@ -63,16 +63,20 @@ local function scanAndSync()
     if backpack then
         for _, item in ipairs(backpack:GetChildren()) do
             local rawName = item.Name
-            
-            -- Bersihkan spasi berlebih di awal/akhir nama item agar tidak duplikat di web
             local cleanName = rawName:gsub("^%s*(.-)%s*$", "%1")
             
-            local category = "Seed"
+            local category = "Seeds" -- Default untuk tanaman/biji
             local lowerName = cleanName:lower()
             
-            -- Deteksi Kategori Gear
-            if lowerName:find("shovel") or lowerName:find("sprinkler") or lowerName:find("can") or lowerName:find("trowel") or lowerName:find("pot") or lowerName:find("gear") or lowerName:find("crate") or lowerName:find("sign") or lowerName:find("chest") then
+            -- Gabungkan Watering Can, Trowel, Sprinkler, dll masuk ke kategori Gear
+            if lowerName:find("shovel") or lowerName:find("sprinkler") or lowerName:find("watering can") or lowerName:find("wateringcan") or lowerName:find("trowel") or lowerName:find("pot") or lowerName:find("gear") or lowerName:find("crate") or lowerName:find("sign") or lowerName:find("chest") then
                 category = "Gear"
+            elseif lowerName:find("gnome") then
+                category = "Gnomes"
+            elseif lowerName:find("seed pack") or lowerName:find("seedpack") then
+                category = "SeedPacks"
+            elseif lowerName:find("egg") then
+                category = "Eggs"
             end
 
             -- Cek apakah item ini termasuk kategori Fruit berbobot
@@ -83,7 +87,7 @@ local function scanAndSync()
                 category = "Fruit"
             end
 
-            -- Ambil jumlah (Amount) item dengan mendeteksi berbagai macam atribut game
+            -- Ambil jumlah item dengan akurat
             local amount = 1
             if item:GetAttribute("Amount") then
                 amount = tonumber(item:GetAttribute("Amount")) or 1
@@ -108,10 +112,8 @@ local function scanAndSync()
                 end
             end
 
-            -- Pastikan amount berbentuk angka bulat murni
             amount = math.floor(tonumber(amount) or 1)
 
-            -- Gunakan nama bersih sebagai key penggabung item
             local key = finalItemName
             if aggregatedItems[key] then
                 aggregatedItems[key].amount = aggregatedItems[key].amount + amount
@@ -146,12 +148,11 @@ local function scanAndSync()
 end
 
 task.spawn(function()
-    -- Jeda awal 5 detik agar game selesai loading sempurna saat pertama join
-    task.wait(5)
-    
+    task.wait(math.random(2, 5))
+    scanAndSync()
+
     while true do
+        task.wait(20 + math.random(1, 10))
         scanAndSync()
-        -- Jeda 30 detik + random delay agar belasan akun alt tidak menabrak rate-limit server
-        task.wait(30 + math.random(1, 10))
     end
 end)
