@@ -24,6 +24,7 @@ end
 
 local function scanAndSync()
     if not httpRequest then return end
+    if not LocalPlayer or not LocalPlayer.Name then return end
 
     local username = LocalPlayer.Name
     local realSheckles = getRealSheckles()
@@ -54,7 +55,7 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. Sync Inventory & Fruit dengan Pembersihan Nama yang Akurat
+    -- 3. Sync Inventory & Fruit
     local itemsPayload = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack") or LocalPlayer:FindFirstChild("Inventory")
     local aggregatedItems = {}
@@ -70,15 +71,12 @@ local function scanAndSync()
                 category = "Gear"
             end
 
-            -- Cek apakah item ini termasuk kategori Fruit berbobot (mengandung pola [xx kg] atau xx kg)
+            -- Cek apakah item ini termasuk kategori Fruit berbobot
             local isFruit = lowerName:find("kg") or rawName:match("%[%s*%d+%.?%d*%s*kg%s*%]") or rawName:match("%d+%.?%d*%s*kg")
 
             local finalItemName = rawName
             if isFruit then
                 category = "Fruit"
-                -- Opsi: Jika ingin nama fruit digabungkan tanpa embel-embel berat kilonya, 
-                -- aktifkan baris di bawah ini. Jika ingin tetap utuh beserta beratnya, biarkan apa adanya.
-                -- finalItemName = (rawName:gsub("%s*%[%s*%d+%.?%d*%s*kg%s*%]", ""):gsub("%s*%d+%.?%d*%s*kg", "")):gsub("^%s*(.-)%s*$", "%1")
             end
 
             -- Ambil jumlah (Amount) item dengan aman
@@ -97,10 +95,7 @@ local function scanAndSync()
                 amount = tonumber(item.Value) or 1
             end
 
-            -- Jika item adalah buah dengan berat unik dan tidak ingin digabung kilonya, 
-            -- jadikan key unik. Tapi jika sudah dibersihkan namanya, dia akan otomatis ter-stack.
             local key = finalItemName
-            
             if aggregatedItems[key] then
                 aggregatedItems[key].amount = aggregatedItems[key].amount + amount
             else
@@ -117,7 +112,7 @@ local function scanAndSync()
         table.insert(itemsPayload, itemData)
     end
 
-    -- Kirim menggunakan RPC function update_user_inventory agar data lama terhapus bersih
+    -- Kirim menggunakan RPC function update_user_inventory
     pcall(function()
         httpRequest({
             Url = SUPABASE_URL .. "rpc/update_user_inventory",
@@ -130,12 +125,16 @@ local function scanAndSync()
         })
     end)
 
-    print("[SYNC SUCCESS] Data & Status Online (" .. username + ") berhasil diperbarui!")
+    print("[SYNC SUCCESS] Data & Status Online (" .. username .. ") berhasil diperbarui!")
 end
 
 task.spawn(function()
+    -- Jeda awal 5 detik agar game selesai loading sempurna saat pertama join
+    task.wait(5)
+    
     while true do
         scanAndSync()
-        task.wait(15)
+        -- Jeda 30 detik + random delay agar belasan akun alt tidak menabrak rate-limit server
+        task.wait(30 + math.random(1, 10))
     end
 end)
