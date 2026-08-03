@@ -79,7 +79,7 @@ local function scanAndSync()
                 category = "Fruit"
             end
 
-            -- Ambil jumlah (Amount) item dengan aman
+            -- Ambil jumlah (Amount) item dengan sangat akurat
             local amount = 1
             if item:GetAttribute("Amount") then
                 amount = tonumber(item:GetAttribute("Amount")) or 1
@@ -87,12 +87,21 @@ local function scanAndSync()
                 amount = tonumber(item:GetAttribute("Count")) or 1
             elseif item:GetAttribute("Stack") then
                 amount = tonumber(item:GetAttribute("Stack")) or 1
+            elseif item:GetAttribute("Quantity") then
+                amount = tonumber(item:GetAttribute("Quantity")) or 1
             elseif item:FindFirstChild("Amount") then
                 amount = tonumber(item.Amount.Value) or 1
             elseif item:FindFirstChild("Count") then
                 amount = tonumber(item.Count.Value) or 1
+            elseif item:FindFirstChild("Stack") then
+                amount = tonumber(item.Stack.Value) or 1
             elseif item:FindFirstChild("Value") then
                 amount = tonumber(item.Value) or 1
+            else
+                local foundNum = rawName:match("%((%d+)%)") or rawName:match("x(%d+)")
+                if foundNum then
+                    amount = tonumber(foundNum) or 1
+                end
             end
 
             local key = finalItemName
