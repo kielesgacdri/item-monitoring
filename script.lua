@@ -1,9 +1,9 @@
--- // Kise Monitoring Script - Final Fixed Version (Anti-Spam & Safe Spawn)
+-- // Kise Monitoring Script - Stable Final Version (Anti-Glitch & Smooth Sync)
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 
 local SUPABASE_URL = "https://ixlfaqxeunlkilmzsbmu.supabase.co/rest/v1/"
-local SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4bGZhcXhldW5sa2lsbXpzYm11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2MDQxNTgsImV4cCI6MjEwMTE4MDE1OH0.Pjp9yiCI6MEfWCmq1SLfDDPEK3aZOVTFwCB2nw-2sgs"
+local SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6Iml4VCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4bGZhcXhldW5sa2lsbXpzYm11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2MDQxNTgsImV4cCI6MjEwMTE4MDE1OH0.Pjp9yiCI6MEfWCmq1SLfDDPEK3aZOVTFwCB2nw-2sgs"
 
 local headers = {
     ["apikey"] = SUPABASE_KEY,
@@ -27,8 +27,7 @@ local function scanAndSync()
     if not httpRequest then return end
     if not LocalPlayer or not LocalPlayer.Name then return end
 
-    -- PENGAMAN UTAMA: Jika karakter belum spawn atau backpack belum ada, batalkan! 
-    -- Ini mencegah akun yang baru join/loading dicatat online atau kirim data fiktif.
+    -- Pengaman: Pastikan karakter sudah benar-benar masuk dan spawn di game
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
     if not LocalPlayer:FindFirstChild("Backpack") then return end
 
@@ -48,7 +47,7 @@ local function scanAndSync()
         })
     end)
 
-    -- 2. Sync Status Online (Hanya dikirim jika benar-benar sudah di dalam game)
+    -- 2. Sync Status Online
     pcall(function()
         httpRequest({
             Url = SUPABASE_URL .. "User_status?on_conflict=username",
@@ -61,7 +60,7 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. INVENTORY: Hitung item secara lokal dengan aman
+    -- 3. INVENTORY SYNC (Aman & Terisolasi per User)
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     local aggregatedItems = {}
 
@@ -117,14 +116,14 @@ local function scanAndSync()
 
     if #itemsPayload > 0 then
         pcall(function()
-            -- Bersihkan data lama user ini dulu secara aman sebelum insert batch baru
+            -- Hapus data inventory lama khusus milik bot ini saja sebelum kirim yang baru
             httpRequest({
-                Url = SUPABASE_URL .. "Item_monitoring?username=eq." .. username,
+                Url = SUPABASE_URL .. "Item_monitoring?username=eq." .. HttpService:UrlEncode(username),
                 Method = "DELETE",
                 Headers = headers
             })
             
-            task.wait(0.5)
+            task.wait(0.4)
 
             httpRequest({
                 Url = SUPABASE_URL .. "Item_monitoring",
@@ -137,14 +136,13 @@ local function scanAndSync()
 end
 
 task.spawn(function()
-    -- Tunggu sampai bot benar-benar masuk ke dalam game dan spawn sempurna
     repeat task.wait(1) until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer:FindFirstChild("Backpack")
-    task.wait(5) -- Jeda stabil sebelum sync pertama
+    task.wait(4)
 
     scanAndSync()
 
     while true do
-        task.wait(15) -- Update per 15 detik agar tidak memberatkan server/database
+        task.wait(20) -- Jeda diperpanjang jadi 20 detik agar server dan web jauh lebih stabil & tidak nge-glitch
         scanAndSync()
     end
 end)
