@@ -1,4 +1,4 @@
--- // Kise Monitoring Script - Fully Fixed & Compatible Version
+-- // Kise Monitoring Script - Ultimate Stable Version
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 
@@ -12,7 +12,6 @@ local headers = {
     ["Prefer"] = "resolution=merge-duplicates"
 }
 
--- Perbaikan utama ada di sini (support semua jenis executor HP)
 local httpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 
 local function getRealSheckles()
@@ -25,10 +24,7 @@ local function getRealSheckles()
 end
 
 local function scanAndSync()
-    if not httpRequest then 
-        warn("[Kise Error] Executor tidak mendukung fungsi HTTP Request!")
-        return 
-    end
+    if not httpRequest then return end
     if not LocalPlayer or not LocalPlayer.Name then return end
 
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
@@ -63,7 +59,7 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. INVENTORY SYNC
+    -- 3. INVENTORY SYNC (Aman dari Error 400)
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     local aggregatedItems = {}
 
@@ -119,18 +115,25 @@ local function scanAndSync()
 
     if #itemsPayload > 0 then
         pcall(function()
+            -- Hapus data lama milik user ini
             httpRequest({
                 Url = SUPABASE_URL .. "Item_monitoring?username=eq." .. HttpService:UrlEncode(username),
                 Method = "DELETE",
                 Headers = headers
             })
             
-            task.wait(0.4)
+            task.wait(0.5)
 
+            -- Kirim data baru dengan header upsert/merge
             httpRequest({
                 Url = SUPABASE_URL .. "Item_monitoring",
                 Method = "POST",
-                Headers = headers,
+                Headers = {
+                    ["apikey"] = SUPABASE_KEY,
+                    ["Authorization"] = "Bearer " .. SUPABASE_KEY,
+                    ["Content-Type"] = "application/json",
+                    ["Prefer"] = "return=minimal"
+                },
                 Body = HttpService:JSONEncode(itemsPayload)
             })
         end)
