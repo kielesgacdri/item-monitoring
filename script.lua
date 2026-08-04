@@ -1,4 +1,4 @@
--- // Kise Monitoring Script - Full Final Real-time Version
+-- // Kise Monitoring Script - Final Fixed Version (Anti-Spam & Safe Spawn)
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 
@@ -8,7 +8,8 @@ local SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 local headers = {
     ["apikey"] = SUPABASE_KEY,
     ["Authorization"] = "Bearer " .. SUPABASE_KEY,
-    ["Content-Type"] = "application/json"
+    ["Content-Type"] = "application/json",
+    ["Prefer"] = "resolution=merge-duplicates"
 }
 
 local httpRequest = syn and syn.request or http_request or request
@@ -26,20 +27,20 @@ local function scanAndSync()
     if not httpRequest then return end
     if not LocalPlayer or not LocalPlayer.Name then return end
 
+    -- PENGAMAN UTAMA: Jika karakter belum spawn atau backpack belum ada, batalkan! 
+    -- Ini mencegah akun yang baru join/loading dicatat online atau kirim data fiktif.
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+    if not LocalPlayer:FindFirstChild("Backpack") then return end
+
     local username = LocalPlayer.Name
     local realSheckles = getRealSheckles()
 
-    -- 1. Sync Sheckles (Upsert)
+    -- 1. Sync Sheckles
     pcall(function()
         httpRequest({
             Url = SUPABASE_URL .. "User_sheckles?on_conflict=username",
             Method = "POST",
-            Headers = {
-                ["apikey"] = SUPABASE_KEY,
-                ["Authorization"] = "Bearer " .. SUPABASE_KEY,
-                ["Content-Type"] = "application/json",
-                ["Prefer"] = "resolution=merge-duplicates"
-            },
+            Headers = headers,
             Body = HttpService:JSONEncode({
                 username = username,
                 sheckles = realSheckles
@@ -47,17 +48,12 @@ local function scanAndSync()
         })
     end)
 
-    -- 2. Sync Status Online (Heartbeat waktu saat ini)
+    -- 2. Sync Status Online (Hanya dikirim jika benar-benar sudah di dalam game)
     pcall(function()
         httpRequest({
             Url = SUPABASE_URL .. "User_status?on_conflict=username",
             Method = "POST",
-            Headers = {
-                ["apikey"] = SUPABASE_KEY,
-                ["Authorization"] = "Bearer " .. SUPABASE_KEY,
-                ["Content-Type"] = "application/json",
-                ["Prefer"] = "resolution=merge-duplicates"
-            },
+            Headers = headers,
             Body = HttpService:JSONEncode({
                 username = username,
                 last_seen = os.date("!%Y-%m-%dT%H:%M:%SZ")
@@ -65,17 +61,8 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. INVENTORY: Hapus data lama user ini, lalu masukkan yang baru (Full Refresh)
-    pcall(function()
-        httpRequest({
-            Url = SUPABASE_URL .. "Item_monitoring?username=eq." .. username,
-            Method = "DELETE",
-            Headers = headers
-        })
-    end)
-
-    local itemsPayload = {}
-    local backpack = LocalPlayer:FindFirstChild("Backpack") or LocalPlayer:FindFirstChild("Inventory")
+    -- 3. INVENTORY: Hitung item secara lokal dengan aman
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
     local aggregatedItems = {}
 
     if backpack then
@@ -109,7 +96,7 @@ local function scanAndSync()
                 if foundNum then amount = tonumber(foundNum) or 1 end
             end
 
-            local key = cleanName
+            local key = username .. "_" .. cleanName
             if aggregatedItems[key] then
                 aggregatedItems[key].amount = aggregatedItems[key].amount + amount
             else
@@ -123,12 +110,22 @@ local function scanAndSync()
         end
     end
 
+    local itemsPayload = {}
     for _, itemData in pairs(aggregatedItems) do
         table.insert(itemsPayload, itemData)
     end
 
     if #itemsPayload > 0 then
         pcall(function()
+            -- Bersihkan data lama user ini dulu secara aman sebelum insert batch baru
+            httpRequest({
+                Url = SUPABASE_URL .. "Item_monitoring?username=eq." .. username,
+                Method = "DELETE",
+                Headers = headers
+            })
+            
+            task.wait(0.5)
+
             httpRequest({
                 Url = SUPABASE_URL .. "Item_monitoring",
                 Method = "POST",
@@ -140,11 +137,14 @@ local function scanAndSync()
 end
 
 task.spawn(function()
-    task.wait(math.random(1, 2))
+    -- Tunggu sampai bot benar-benar masuk ke dalam game dan spawn sempurna
+    repeat task.wait(1) until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer:FindFirstChild("Backpack")
+    task.wait(5) -- Jeda stabil sebelum sync pertama
+
     scanAndSync()
 
     while true do
-        task.wait(4) -- Update cepat tiap 4 detik
+        task.wait(15) -- Update per 15 detik agar tidak memberatkan server/database
         scanAndSync()
     end
 end)
