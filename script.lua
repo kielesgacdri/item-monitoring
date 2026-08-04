@@ -1,4 +1,4 @@
--- // Kise Monitoring Script - Final Version
+-- // Kise Monitoring Script - Fix Upsert Version
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 
@@ -9,7 +9,7 @@ local headers = {
     ["apikey"] = SUPABASE_KEY,
     ["Authorization"] = "Bearer " .. SUPABASE_KEY,
     ["Content-Type"] = "application/json",
-    ["Prefer"] = "resolution=merge-duplicates,return=minimal"
+    ["Prefer"] = "resolution=merge-duplicates" -- PENTING: Supaya data lama otomatis di-update, bukan dibikin baris baru
 }
 
 local httpRequest = syn and syn.request or http_request or request
@@ -56,7 +56,7 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. Sync Inventory & Fruit (Direct Delete + Insert)
+    -- 3. Sync Inventory (Menggunakan Upsert on_conflict username & item_name)
     local itemsPayload = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack") or LocalPlayer:FindFirstChild("Inventory")
     local aggregatedItems = {}
@@ -69,57 +69,38 @@ local function scanAndSync()
             local category = "Seeds"
             local lowerName = cleanName:lower()
             
-            if lowerName:find("shovel") or lowerName:find("sprinkler") or lowerName:find("watering can") or lowerName:find("wateringcan") or lowerName:find("trowel") or lowerName:find("pot") or lowerName:find("gear") or lowerName:find("crate") or lowerName:find("sign") or lowerName:find("chest") then
+            if lowerName:find("shovel") or lowerName:find("sprinkler") or lowerName:find("watering can") or lowerName:find("gear") or lowerName:find("crate") or lowerName:find("chest") then
                 category = "Gear"
             elseif lowerName:find("gnome") then
                 category = "Gnomes"
-            elseif lowerName:find("seed pack") or lowerName:find("seedpack") then
+            elseif lowerName:find("seed pack") then
                 category = "SeedPacks"
             elseif lowerName:find("egg") then
                 category = "Eggs"
             end
 
-            local isFruit = lowerName:find("kg") or cleanName:match("%[%s*%d+%.?%d*%s*kg%s*%]") or cleanName:match("%d+%.?%d*%s*kg")
-            local finalItemName = cleanName
-            if isFruit then
-                category = "Fruit"
-            end
+            local isFruit = lowerName:find("kg") or cleanName:match("%[%s*%d+%.?%d*%s*kg%s*%]")
+            if isFruit then category = "Fruit" end
 
             local amount = 1
             if item:GetAttribute("Amount") then
                 amount = tonumber(item:GetAttribute("Amount")) or 1
-            elseif item:GetAttribute("Count") then
-                amount = tonumber(item:GetAttribute("Count")) or 1
-            elseif item:GetAttribute("Stack") then
-                amount = tonumber(item:GetAttribute("Stack")) or 1
-            elseif item:GetAttribute("Quantity") then
-                amount = tonumber(item:GetAttribute("Quantity")) or 1
             elseif item:FindFirstChild("Amount") then
                 amount = tonumber(item.Amount.Value) or 1
-            elseif item:FindFirstChild("Count") then
-                amount = tonumber(item.Count.Value) or 1
-            elseif item:FindFirstChild("Stack") then
-                amount = tonumber(item.Stack.Value) or 1
-            elseif item:FindFirstChild("Value") then
-                amount = tonumber(item.Value) or 1
             else
                 local foundNum = cleanName:match("%((%d+)%)") or cleanName:match("x(%d+)")
-                if foundNum then
-                    amount = tonumber(foundNum) or 1
-                end
+                if foundNum then amount = tonumber(foundNum) or 1 end
             end
 
-            amount = math.floor(tonumber(amount) or 1)
-
-            local key = finalItemName
+            local key = cleanName
             if aggregatedItems[key] then
                 aggregatedItems[key].amount = aggregatedItems[key].amount + amount
             else
                 aggregatedItems[key] = {
                     username = tostring(username),
-                    item_name = tostring(finalItemName),
+                    item_name = tostring(cleanName),
                     category = tostring(category),
-                    amount = amount
+                    amount = math.floor(amount)
                 }
             end
         end
@@ -129,39 +110,19 @@ local function scanAndSync()
         table.insert(itemsPayload, itemData)
     end
 
-    -- STEP A: Hapus data inventory lama khusus username ini di Supabase
-    pcall(function()
-        httpRequest({
-            Url = SUPABASE_URL .. "Item_monitoring?username=eq." .. username,
-            Method = "DELETE",
-            Headers = {
-                ["apikey"] = SUPABASE_KEY,
-                ["Authorization"] = "Bearer " .. SUPABASE_KEY,
-                ["Content-Type"] = "application/json"
-            }
-        })
-    end)
-
-    task.wait(0.5)
-
-    -- STEP B: Masukkan data inventory baru yang valid saat ini
+    -- Kirim data inventaris baru dengan metode UPSERT (on_conflict username, item_name)
     if #itemsPayload > 0 then
         pcall(function()
             httpRequest({
-                Url = SUPABASE_URL .. "Item_monitoring",
+                Url = SUPABASE_URL .. "Item_monitoring?on_conflict=username,item_name",
                 Method = "POST",
-                Headers = {
-                    ["apikey"] = SUPABASE_KEY,
-                    ["Authorization"] = "Bearer " .. SUPABASE_KEY,
-                    ["Content-Type"] = "application/json",
-                    ["Prefer"] = "return=minimal"
-                },
+                Headers = headers,
                 Body = HttpService:JSONEncode(itemsPayload)
             })
         end)
     end
 
-    print("[SYNC SUCCESS] Data & Status Online (" .. username .. ") berhasil diperbarui!")
+    print("[SYNC SUCCESS] " .. username .. " berhasil disinkronkan!")
 end
 
 task.spawn(function()
