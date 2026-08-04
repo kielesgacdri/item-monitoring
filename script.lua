@@ -1,9 +1,9 @@
--- // Kise Monitoring Script - Stable Final Version (Anti-Glitch & Smooth Sync)
+-- // Kise Monitoring Script - Fixed & Working Version
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 
 local SUPABASE_URL = "https://ixlfaqxeunlkilmzsbmu.supabase.co/rest/v1/"
-local SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6Iml4VCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4bGZhcXhldW5sa2lsbXpzYm11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2MDQxNTgsImV4cCI6MjEwMTE4MDE1OH0.Pjp9yiCI6MEfWCmq1SLfDDPEK3aZOVTFwCB2nw-2sgs"
+local SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4bGZhcXhldW5sa2lsbXpzYm11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2MDQxNTgsImV4cCI6MjEwMTE4MDE1OH0.Pjp9yiCI6MEfWCmq1SLfDDPEK3aZOVTFwCB2nw-2sgs"
 
 local headers = {
     ["apikey"] = SUPABASE_KEY,
@@ -27,7 +27,6 @@ local function scanAndSync()
     if not httpRequest then return end
     if not LocalPlayer or not LocalPlayer.Name then return end
 
-    -- Pengaman: Pastikan karakter sudah benar-benar masuk dan spawn di game
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
     if not LocalPlayer:FindFirstChild("Backpack") then return end
 
@@ -60,7 +59,7 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. INVENTORY SYNC (Aman & Terisolasi per User)
+    -- 3. INVENTORY SYNC
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     local aggregatedItems = {}
 
@@ -116,7 +115,6 @@ local function scanAndSync()
 
     if #itemsPayload > 0 then
         pcall(function()
-            -- Hapus data inventory lama khusus milik bot ini saja sebelum kirim yang baru
             httpRequest({
                 Url = SUPABASE_URL .. "Item_monitoring?username=eq." .. HttpService:UrlEncode(username),
                 Method = "DELETE",
@@ -137,12 +135,12 @@ end
 
 task.spawn(function()
     repeat task.wait(1) until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer:FindFirstChild("Backpack")
-    task.wait(4)
+    task.wait(3)
 
     scanAndSync()
 
     while true do
-        task.wait(20) -- Jeda diperpanjang jadi 20 detik agar server dan web jauh lebih stabil & tidak nge-glitch
+        task.wait(20)
         scanAndSync()
     end
 end)
