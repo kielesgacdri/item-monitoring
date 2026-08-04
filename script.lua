@@ -1,4 +1,4 @@
--- // Kise Monitoring Script - Fixed & Working Version
+-- // Kise Monitoring Script - Fully Fixed & Compatible Version
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 
@@ -12,7 +12,8 @@ local headers = {
     ["Prefer"] = "resolution=merge-duplicates"
 }
 
-local httpRequest = syn and syn.request or http_request or request
+-- Perbaikan utama ada di sini (support semua jenis executor HP)
+local httpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 
 local function getRealSheckles()
     if LocalPlayer:FindFirstChild("leaderstats") and LocalPlayer.leaderstats:FindFirstChild("Sheckles") then
@@ -24,7 +25,10 @@ local function getRealSheckles()
 end
 
 local function scanAndSync()
-    if not httpRequest then return end
+    if not httpRequest then 
+        warn("[Kise Error] Executor tidak mendukung fungsi HTTP Request!")
+        return 
+    end
     if not LocalPlayer or not LocalPlayer.Name then return end
 
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
