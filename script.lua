@@ -1,4 +1,4 @@
--- // Kise Monitoring Script - Fix Upsert Version
+-- // Kise Monitoring Script - Full Final Real-time Version
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 
@@ -8,8 +8,7 @@ local SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 local headers = {
     ["apikey"] = SUPABASE_KEY,
     ["Authorization"] = "Bearer " .. SUPABASE_KEY,
-    ["Content-Type"] = "application/json",
-    ["Prefer"] = "resolution=merge-duplicates" -- PENTING: Supaya data lama otomatis di-update, bukan dibikin baris baru
+    ["Content-Type"] = "application/json"
 }
 
 local httpRequest = syn and syn.request or http_request or request
@@ -30,12 +29,17 @@ local function scanAndSync()
     local username = LocalPlayer.Name
     local realSheckles = getRealSheckles()
 
-    -- 1. Sync Sheckles
+    -- 1. Sync Sheckles (Upsert)
     pcall(function()
         httpRequest({
             Url = SUPABASE_URL .. "User_sheckles?on_conflict=username",
             Method = "POST",
-            Headers = headers,
+            Headers = {
+                ["apikey"] = SUPABASE_KEY,
+                ["Authorization"] = "Bearer " .. SUPABASE_KEY,
+                ["Content-Type"] = "application/json",
+                ["Prefer"] = "resolution=merge-duplicates"
+            },
             Body = HttpService:JSONEncode({
                 username = username,
                 sheckles = realSheckles
@@ -43,12 +47,17 @@ local function scanAndSync()
         })
     end)
 
-    -- 2. Sync Status Online (Heartbeat)
+    -- 2. Sync Status Online (Heartbeat waktu saat ini)
     pcall(function()
         httpRequest({
             Url = SUPABASE_URL .. "User_status?on_conflict=username",
             Method = "POST",
-            Headers = headers,
+            Headers = {
+                ["apikey"] = SUPABASE_KEY,
+                ["Authorization"] = "Bearer " .. SUPABASE_KEY,
+                ["Content-Type"] = "application/json",
+                ["Prefer"] = "resolution=merge-duplicates"
+            },
             Body = HttpService:JSONEncode({
                 username = username,
                 last_seen = os.date("!%Y-%m-%dT%H:%M:%SZ")
@@ -56,7 +65,15 @@ local function scanAndSync()
         })
     end)
 
-    -- 3. Sync Inventory (Menggunakan Upsert on_conflict username & item_name)
+    -- 3. INVENTORY: Hapus data lama user ini, lalu masukkan yang baru (Full Refresh)
+    pcall(function()
+        httpRequest({
+            Url = SUPABASE_URL .. "Item_monitoring?username=eq." .. username,
+            Method = "DELETE",
+            Headers = headers
+        })
+    end)
+
     local itemsPayload = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack") or LocalPlayer:FindFirstChild("Inventory")
     local aggregatedItems = {}
@@ -110,27 +127,24 @@ local function scanAndSync()
         table.insert(itemsPayload, itemData)
     end
 
-    -- Kirim data inventaris baru dengan metode UPSERT (on_conflict username, item_name)
     if #itemsPayload > 0 then
         pcall(function()
             httpRequest({
-                Url = SUPABASE_URL .. "Item_monitoring?on_conflict=username,item_name",
+                Url = SUPABASE_URL .. "Item_monitoring",
                 Method = "POST",
                 Headers = headers,
                 Body = HttpService:JSONEncode(itemsPayload)
             })
         end)
     end
-
-    print("[SYNC SUCCESS] " .. username .. " berhasil disinkronkan!")
 end
 
 task.spawn(function()
-    task.wait(math.random(2, 5))
+    task.wait(math.random(1, 2))
     scanAndSync()
 
     while true do
-        task.wait(20 + math.random(1, 10))
+        task.wait(4) -- Update cepat tiap 4 detik
         scanAndSync()
     end
 end)
